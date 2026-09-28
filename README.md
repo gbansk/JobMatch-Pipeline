@@ -2,6 +2,14 @@
 
 **JobMatch Pipeline** is an automated, local-first candidate evaluation and job discovery application. By orchestrating targeted web scraping, database deduplication, local Large Language Model (LLM) inference, LaTeX document compilation, and dynamic HTML rendering, JobMatch automates job search and application preparation while keeping your career data 100% private.
 
+An end-to-end Python pipeline designed to automate job discovery, fit analysis, and cover letter creation using local AI model evaluation.
+
+### Key Features
+* **Automated Job Scraping & Deduplication:** Ingests live job listings into a local SQLite database, automatically filtering out duplicates.
+* **Multi-Track Profile Evaluation:** Evaluates each job description against multiple CV profiles (e.g., Developer vs. Management) using local LLMs via Ollama to compute fit scores and skill alignments.
+* **Dynamic LaTeX Cover Letters:** Automatically generates tailored `.tex` cover letters and compiles them into clean PDFs for top-scoring matches.
+* **Comprehensive HTML Reporting:** Emits structured JSON summaries and renders a visual Jinja2-powered HTML match report to easily review pipeline results.
+
 ---
 
 ## 🚀 Key Advantages & Architecture Highlights
