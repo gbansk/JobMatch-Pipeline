@@ -1,0 +1,92 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[a4paper, margin=0.8in, left=1.0in]{geometry}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+% Define moderncv green color palette
+\definecolor{color0}{RGB}{0,0,0}         % Main body text
+\definecolor{color1}{RGB}{34,139,34}     % Primary accent (Green)
+\definecolor{color2}{RGB}{112,128,144}   % Subtitle/Details (Slate Grey)
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+% ------------------------------------------------------------------------------
+% HEADER BLOCK
+% ------------------------------------------------------------------------------
+% \begin{minipage}[t]{0.50\textwidth}
+%   \vspace{0pt}
+%   {\fontsize{26}{30}\selectfont \color{color1}\textbf{__CANDIDATE_NAME__}}
+% \end{minipage}%
+% \begin{minipage}[t]{0.50\textwidth}
+%   \vspace{0pt}
+%   \raggedleft \small \color{color2}
+%   \begin{tabular}{@{}r@{}}
+%     __CANDIDATE_ADDRESS__ \\
+%     __CANDIDATE_PHONE__ \\
+%     __CANDIDATE_EMAIL__
+%   \end{tabular}
+% \end{minipage}
+
+% \vspace{0.8em}
+% {\color{color1}\hrule height 1.5pt}
+% \vspace{1.5em}
+
+% ------------------------------------------------------------------------------
+% RECIPIENT & DATE
+% ------------------------------------------------------------------------------
+\begin{minipage}[t]{0.6\textwidth}
+  \vspace{0pt}
+  \color{color0}
+  \textbf{Hiring Manager} \\
+  __COMPANY__
+\end{minipage}%
+\begin{minipage}[t]{0.4\textwidth}
+  \vspace{0pt}
+  \raggedleft \color{color2}
+  \today
+\end{minipage}
+
+\vspace{1.5em}
+
+% ------------------------------------------------------------------------------
+% LETTER BODY
+% ------------------------------------------------------------------------------
+{\color{color0}
+\textbf{Dear Hiring Manager,}
+
+\vspace{1em}
+
+__PARA1__
+
+\vspace{1em}
+
+__PARA2__
+
+\vspace{1em}
+
+__PARA3__
+
+\vspace{1em}
+
+Thank you for considering my application. I look forward to discussing how my expertise can contribute to the success of __COMPANY__.
+
+\vspace{1.5em}
+
+Yours Sincerely,
+
+\vspace{1.5em}
+
+\textbf{__CANDIDATE_NAME__} \\
+% \small \color{color2} Attachment: CV
+     __CANDIDATE_PHONE__ \\
+     __CANDIDATE_EMAIL__
+}
+
+\end{document}

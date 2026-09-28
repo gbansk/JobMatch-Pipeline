@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Job Match Evaluation Digest</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 30px; background: #f4f6f8; color: #333; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .meta { font-size: 0.9em; color: #666; margin-bottom: 20px; }
+        .card { border: 1px solid #e1e4e8; border-radius: 6px; padding: 18px; margin-bottom: 16px; background: #fafbfc; }
+        .card.high-match { border-left: 6px solid #28a745; }
+        .card.med-match { border-left: 6px solid #ffc107; }
+        .card.low-match { border-left: 6px solid #dc3545; opacity: 0.7; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .title { font-size: 1.2em; font-weight: bold; color: #0366d6; text-decoration: none; }
+        .title:hover { text-decoration: underline; }
+        .company { font-size: 1.0em; color: #444; margin-top: 4px; }
+        .track-badge { display: inline-block; background: #e9ecef; color: #495057; font-size: 0.75em; padding: 2px 6px; border-radius: 3px; font-weight: 600; margin-left: 6px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; color: #fff; display: inline-block; }
+        .badge-high { background: #28a745; }
+        .badge-med { background: #d97706; }
+        .badge-low { background: #dc3545; }
+        .summary { margin: 12px 0; font-style: italic; color: #444; }
+        ul { margin: 6px 0; padding-left: 20px; font-size: 0.95em; }
+        .tag-green { color: #155724; }
+        .actions { margin-top: 14px; padding-top: 10px; border-top: 1px solid #eaeaea; display: flex; justify-content: space-between; align-items: center; }
+        .apply-btn { background-color: #0a66c2; color: #ffffff; text-decoration: none; padding: 6px 14px; font-size: 0.85em; font-weight: 600; border-radius: 16px; transition: background-color 0.2s; }
+        .apply-btn:hover { background-color: #004182; }
+        .pdf-link { font-size: 0.85em; font-weight: 600; color: #28a745; text-decoration: none; }
+        .pdf-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌅 Morning Job Digest</h1>
+        <div class="meta">Generated on {{ timestamp }} | Evaluated {{ jobs|length }} new listings</div>
+
+        {% for job in jobs %}
+        <div class="card {% if job.score >= 80 %}high-match{% elif job.score >= 60 %}med-match{% else %}low-match{% endif %}">
+            <div class="header">
+                <div>
+                    <a class="title" href="{{ job.job_url }}" target="_blank">{{ job.title }}</a>
+                    <span class="track-badge">{{ job.track }}</span>
+                    <div class="company">{{ job.company }} &bull; {{ job.location }}</div>
+                </div>
+                <div>
+                    <span class="badge {% if job.score >= 80 %}badge-high{% elif job.score >= 60 %}badge-med{% else %}badge-low{% endif %}">
+                        {{ job.score }}% ({% if job.score >= 80 %}HIGH_MATCH{% elif job.score >= 60 %}MED_MATCH{% else %}LOW_MATCH{% endif %})
+                    </span>
+                </div>
+            </div>
+            
+            <div class="summary">{{ job.summary }}</div>
+            
+            {% if job.key_alignments %} 
+            <div style="margin-top: 10px;">
+                <strong>Key Alignments:</strong>
+                <ul style="margin: 4px 0; padding-left: 20px;">
+                    {% for item in job.key_alignments %}
+                    <li style="color: #155724; font-size: 0.9em;">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if job.missing_skills %}
+            <div style="margin-top: 8px;">
+                <strong>Missing Skills / Gaps:</strong>
+                <ul style="margin: 4px 0; padding-left: 20px;">
+                    {% for item in job.missing_skills %}
+                    <li style="color: #721c24; font-size: 0.9em;">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            <div class="actions">
+                {% if job.pdf_filename %}
+                <a class="pdf-link" href="{{ job.pdf_filename }}" target="_blank">📄 View Cover Letter PDF</a>
+                {% else %}
+                <span></span>
+                {% endif %}
+                <a class="apply-btn" href="{{ job.job_url }}" target="_blank">View & Apply on LinkedIn ↗</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

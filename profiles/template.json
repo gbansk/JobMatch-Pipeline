@@ -1,0 +1,20 @@
+{
+  "basics": {
+    "name": "",
+    "address": "",
+    "email": "",
+    "phone": "",
+    "linkedin": ""
+  },
+  "summary": "",
+  "skills": [],
+  "experience": [
+    {
+      "role_header": "",
+      "highlights": []
+    }
+  ],
+  "education": [],
+  "certifications": [],
+  "raw_sections": {}
+}
