@@ -25,12 +25,14 @@ An end-to-end Python pipeline designed to automate job discovery, fit analysis, 
 
 ### 3. Structured Match Insights (`evaluator.py` & `report_builder.py`)
 * **Actionable Gap Analysis**: Goes beyond a simple numerical score (0–100) by extracting structured JSON payloads featuring **Key Alignments** (strong matches to leverage) and **Missing Skills** (gaps to address or prepare for in interviews).
+* **Robust JSON Handling**: Includes regex-based extraction to handle non-standard model outputs (e.g., when local models output stacked JSON objects or raw meta-data) ensuring raw JSON code never leaks into rendered LaTeX cover letters.
 * **Automated Tailored Cover Letters**: Top-scoring roles automatically trigger LaTeX engine compilation (`pdflatex`) to produce personalized cover letter PDFs tailored to the target listing.
 * **Daily Digest Summary Report**: Compiles evaluation runs into a single HTML dashboard (`match_report.html`) complete with visual score badges and color-coded gap lists for quick review.
 
 ### 4. Modular & Developer-Friendly
 * **Test-Driven Design**: Built with a `pytest` test suite verifying Jinja2 template rendering and structural data assertions prior to deployment.
 * **Decoupled Execution**: Flexible CLI flags (such as `--skip-scrape`) allow developers to execute scraping, local inference, and HTML report building together or independently.
+
 
 ---
 
@@ -180,22 +182,25 @@ If you want automatic compilation of `.tex` files into `.pdf` cover letters, ens
 ```text
 ├── db.py                      # SQLite database schema, deduplication, and state tracking
 ├── evaluator.py               # Ollama prompt building and JSON response parser
-├── cover_letter.py            # LaTeX cover letter rendering engine
+├── cover_letter.py            # LaTeX cover letter rendering engine & JSON sanitization
 ├── report_builder.py          # Jinja2 HTML digest report renderer
 ├── main.py                    # Pipeline CLI orchestration entry point
 ├── report_template.html       # Production Jinja2 HTML report layout
-├── cover_letter_template.tex  # Base LaTeX template
-├── profiles/                  # User CV profile JSON files (e.g. Developer, Management)
-├── tests/                     # Unit test suite
+├── cover_letter_template.tex  # Base LaTeX cover letter template
+├── profiles/                  # Directory for candidate CV profiles (e.g., developer.json)
+├── tests/                     # Pytest suite verifying rendering, DB, and pipeline logic
 │   ├── conftest.py
 │   ├── test_cover_letter.py
-│   ├── test_evaluator.py
-│   ├── test_pdf_rendering.py
 │   ├── test_db.py
+│   ├── test_evaluator.py
 │   ├── test_main.py
+│   ├── test_pdf_rendering.py
 │   └── test_report_builder.py
-├── jobs.db                    # Auto-generated SQLite database
-└── generated_docs/            # Output folder for report_data.json, HTML reports, and PDFs
+├── jobs.db                    # Auto-generated SQLite database (created on first run)
+└── output/                    # Pipeline output directory
+    ├── match_report.html      # Visual Jinja2 summary report
+    ├── report_data.json       # Structured run metadata and scores
+    └── pdfs/                  # Generated .tex source files and compiled PDFs
 ```
 
 ### Profiles Configuration (`profiles/`)
@@ -284,6 +289,11 @@ To re-process only the first 2 job listings in your database:
   sqlite3 jobs.db "UPDATE job_listings SET verdict = 'pending' WHERE rowid IN (SELECT rowid FROM job_listings LIMIT 2);"
   python main.py --skip-scrape
   ```
+
+## ⚠️ Known Model Quirks & Edge Cases
+
+* **Stacked JSON Outputs:** Smaller local models (like `llama3.2`) can output multiple JSON objects back-to-back instead of a single merged object. `cover_letter.py` automatically parses and isolates `cover_letter_body` via regex to prevent metadata from appearing in rendered PDFs.
+* **Missing Contact Fields:** If optional profile details (like phone or full address) are missing, double line breaks (`\\`) in the LaTeX template are automatically cleaned up via regex to prevent LaTeX compilation errors.
 
 ---
 
