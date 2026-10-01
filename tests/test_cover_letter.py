@@ -2,14 +2,16 @@ import os
 import subprocess
 from unittest.mock import MagicMock, patch
 import pytest
+import re
+import json
 
 from cover_letter import (
     cleanup_build_artifacts,
     get_cover_letter_paths,
     render_latex_cover_letter,
     sanitize_filename,
+    extract_cover_letter_body,
 )
-
 
 # --- Fixtures ---
 
@@ -114,3 +116,18 @@ def test_render_latex_cover_letter_pdflatex_missing(mock_run, sample_cv, latex_t
     # TeX file is generated cleanly even if pdflatex is not installed locally
     assert success is False
     assert os.path.exists(output_tex)
+
+
+# Use the production extract_cover_letter_body imported above.
+
+def test_extract_cover_letter_body_valid_json():
+    raw_input = '{"cover_letter_body": "Dear Hiring Manager..."}'
+    assert extract_cover_letter_body(raw_input) == "Dear Hiring Manager..."
+
+def test_extract_cover_letter_body_stacked_json_regex():
+    raw_input = '{"meta": "data"}\n{"cover_letter_body": "Extracted via regex..."}'
+    assert extract_cover_letter_body(raw_input) == "Extracted via regex..."
+
+def test_extract_cover_letter_body_fallback_plain_text():
+    raw_input = "```json\nDear Hiring Manager, here is plain text.\n```"
+    assert extract_cover_letter_body(raw_input) == "Dear Hiring Manager, here is plain text."
