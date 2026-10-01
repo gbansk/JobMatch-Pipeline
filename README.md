@@ -25,7 +25,7 @@ An end-to-end Python pipeline designed to automate job discovery, fit analysis, 
 
 ### 3. Structured Match Insights (`evaluator.py` & `report_builder.py`)
 * **Actionable Gap Analysis**: Goes beyond a simple numerical score (0–100) by extracting structured JSON payloads featuring **Key Alignments** (strong matches to leverage) and **Missing Skills** (gaps to address or prepare for in interviews).
-* **Robust JSON Handling**: Includes regex-based extraction to handle non-standard model outputs (e.g., when local models output stacked JSON objects or raw meta-data) ensuring raw JSON code never leaks into rendered LaTeX cover letters.
+* **Flexible Response Handling**: Employs pattern matching to extract structured content from common local LLM output formats (such as wrapper blocks or stacked JSON objects), mitigating raw JSON leakage in rendered outputs.
 * **Automated Tailored Cover Letters**: Top-scoring roles automatically trigger LaTeX engine compilation (`pdflatex`) to produce personalized cover letter PDFs tailored to the target listing.
 * **Daily Digest Summary Report**: Compiles evaluation runs into a single HTML dashboard (`match_report.html`) complete with visual score badges and color-coded gap lists for quick review.
 
@@ -234,7 +234,7 @@ Scrape LinkedIn for target roles, evaluate matches with Ollama, generate cover l
 | `--profiles` | `-p` | `"profiles"` | Directory containing profile JSON files |
 | `--model` | `-m` | `"llama3.2"` | Local Ollama model to execute |
 | `--template` | `-t` | `"cover_letter_template.tex"` | Base LaTeX cover letter template path |
-| `--outdir` | `-o` | `"generated_docs"` | Directory where generated reports and PDFs are written |
+| `--outdir` | `-o` | `"output"` | Directory where generated reports and PDFs are written |
 | `--min-score` | | `70` | Minimum match fit score (0–100) required to compile a PDF cover letter |
 | `--skip-scrape`| | `False` | Skip scraping and process pending jobs already in `jobs.db` |
 
@@ -292,7 +292,7 @@ To re-process only the first 2 job listings in your database:
 
 ## ⚠️ Known Model Quirks & Edge Cases
 
-* **Stacked JSON Outputs:** Smaller local models (like `llama3.2`) can output multiple JSON objects back-to-back instead of a single merged object. `cover_letter.py` automatically parses and isolates `cover_letter_body` via regex to prevent metadata from appearing in rendered PDFs.
+* **Stacked JSON Outputs:** Smaller local models (like `llama3.2`) can output multiple JSON objects back-to-back instead of a single merged object. `cover_letter.py` uses pattern matching to extract `cover_letter_body` from common output formats to reduce the risk of metadata appearing in rendered PDFs.
 * **Missing Contact Fields:** If optional profile details (like phone or full address) are missing, double line breaks (`\\`) in the LaTeX template are automatically cleaned up via regex to prevent LaTeX compilation errors.
 
 ---

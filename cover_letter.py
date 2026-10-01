@@ -113,24 +113,8 @@ def render_latex_cover_letter(
         cand_address = str(location or "")
 
     # Robust extraction of cover_letter_body if text contains raw or stacked JSON
-    if isinstance(body_text, str) and ("cover_letter_body" in body_text or body_text.strip().startswith("{")):
-        match = re.search(r'"cover_letter_body"\s*:\s*("(?:[^"\\]|\\.)*"|\[[^\]]*\])', body_text, re.DOTALL)
-        if match:
-            try:
-                extracted = json.loads(match.group(1))
-                if isinstance(extracted, list):
-                    body_text = "\n\n".join(extracted)
-                else:
-                    body_text = str(extracted)
-            except json.JSONDecodeError:
-                pass
-        else:
-            try:
-                parsed = json.loads(body_text)
-                body_text = parsed.get("cover_letter_body", body_text)
-            except json.JSONDecodeError:
-                pass
-
+    body_text = extract_cover_letter_body(body_text)
+    
     # Format body paragraphs
     paragraphs = [p.strip() for p in body_text.split("\n\n") if p.strip()]
     para1 = paragraphs[0] if len(paragraphs) > 0 else body_text
@@ -203,3 +187,28 @@ def render_latex_cover_letter(
         cleanup_build_artifacts(output_tex)
 
     return pdf_compiled
+
+
+def extract_cover_letter_body(body_text: str) -> str:
+    """Extracts cover letter body text from raw text, JSON strings, or stacked JSON structures."""
+    if not isinstance(body_text, str):
+        return str(body_text or "")
+
+    if "cover_letter_body" in body_text or body_text.strip().startswith("{"):
+        match = re.search(r'"cover_letter_body"\s*:\s*("(?:[^"\\]|\\.)*"|\[[^\]]*\])', body_text, re.DOTALL)
+        if match:
+            try:
+                extracted = json.loads(match.group(1))
+                if isinstance(extracted, list):
+                    return "\n\n".join(extracted)
+                return str(extracted)
+            except json.JSONDecodeError:
+                pass
+        else:
+            try:
+                parsed = json.loads(body_text)
+                return str(parsed.get("cover_letter_body", body_text))
+            except json.JSONDecodeError:
+                pass
+
+    return body_text
