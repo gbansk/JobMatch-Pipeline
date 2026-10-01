@@ -155,3 +155,46 @@ def test_generate_html_report_creates_output_directory(tmp_path, sample_report_d
     )
 
     assert nested_output_html.exists()
+
+
+def test_generate_html_report_normalizes_pdf_path(tmp_path):
+    # 1. Setup temporary directory structure and dummy inputs
+    data_file = tmp_path / "report_data.json"
+    output_file = tmp_path / "match_report.html"
+    
+    # Mock data layout matching real application output
+    mock_data = {
+        "timestamp": "2026-10-01 10:00",
+        "jobs": [
+            {
+                "company": "TestCorp",
+                "title": "Software Engineer",
+                "location": "Melbourne",
+                "track": "Developer CV",
+                "score": 85,
+                "summary": "Great match",
+                "key_alignments": [],
+                "missing_skills": [],
+                "job_url": "https://example.com/job/1",
+                "pdf_filename": "CoverLetter_TestCorp_SoftwareEngineer.pdf"
+            }
+        ]
+    }
+    
+    # Write mock JSON
+    data_file.write_text(json.dumps(mock_data), encoding="utf-8")
+
+    # 2. Execute report builder with relative project template
+    generate_html_report(
+        data_path=str(data_file),
+        template_path="report_template.html",
+        output_path=str(output_file)
+    )
+
+    # 3. Assert HTML output was generated and contains corrected path
+    assert output_file.exists()
+    html_content = output_file.read_text(encoding="utf-8")
+    
+    # Verify the href contains the 'pdfs/' prefix
+    expected_href = 'href="pdfs/CoverLetter_TestCorp_SoftwareEngineer.pdf"'
+    assert expected_href in html_content, f"Expected '{expected_href}' to be present in rendered HTML."

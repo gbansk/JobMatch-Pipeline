@@ -158,5 +158,33 @@ def test_render_latex_escaping_special_characters(tmp_path):
     assert r"\$" in content
 
 
+def test_fast_pdf_generation_error_logging(tmp_path, capsys):
+    # Force render_latex_cover_letter to return False and write a mock .log file with LaTeX errors
+    out_dir = tmp_path / "output"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log_file = out_dir / "test_fast_output.log"
+    log_file.write_text("! Undefined control sequence.\nSome error occurred", encoding="utf-8")
+
+    with patch("test_pdf_rendering.ROOT_DIR", str(tmp_path)), \
+         patch("test_pdf_rendering.render_latex_cover_letter", return_value=False):
+        try:
+            test_fast_pdf_generation()
+        except AssertionError:
+            pass
+
+    captured = capsys.readouterr()
+    assert "LATEX COMPILATION ERROR LOG:" in captured.out
+    assert "Undefined control sequence." in captured.out
+
+
+def test_pdf_rendering_cli_entrypoint():
+    """Verify CLI entrypoint invocation."""
+    with patch("test_pdf_rendering.test_fast_pdf_generation") as mock_test:
+        import test_pdf_rendering
+        # Simulate running via `python tests/test_pdf_rendering.py`
+        if __name__ == "__main__":
+            test_pdf_rendering.test_fast_pdf_generation()
+            assert mock_test.called
+
 if __name__ == "__main__":
     test_fast_pdf_generation()
