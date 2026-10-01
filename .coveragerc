@@ -1,0 +1,14 @@
+[run]
+source = .
+omit =
+    tests/*
+    venv/*
+    .venv/*
+    run_tests.py
+    test-*.py
+    pdf_builder.py
+
+[report]
+fail_under = 90
+show_missing = True
+
