@@ -118,28 +118,7 @@ def test_render_latex_cover_letter_pdflatex_missing(mock_run, sample_cv, latex_t
     assert os.path.exists(output_tex)
 
 
-def extract_cover_letter_body(response_text: str) -> str:
-    """
-    Attempts to extract cover_letter_body from common JSON formats/wrappers.
-    Falls back gracefully if full parsing or regex extraction fails.
-    """
-    # 1. Try standard JSON parsing first
-    try:
-        data = json.loads(response_text)
-        if isinstance(data, dict) and "cover_letter_body" in data:
-            return data["cover_letter_body"]
-    except json.JSONDecodeError:
-        pass
-
-    # 2. Handle common wrapper patterns / stacked objects via regex
-    pattern = r'"cover_letter_body"\s*:\s*"((?:[^"\\]|\\.)*)"'
-    match = re.search(pattern, response_text, re.DOTALL)
-    if match:
-        return match.group(1).encode().decode('unicode_escape')
-
-    # 3. Fallback: Clean non-JSON text wrappers without failing
-    cleaned_text = re.sub(r'^```json\s*|\s*```$', '', response_text.strip(), flags=re.MULTILINE)
-    return cleaned_text
+# Use the production extract_cover_letter_body imported above.
 
 def test_extract_cover_letter_body_valid_json():
     raw_input = '{"cover_letter_body": "Dear Hiring Manager..."}'
