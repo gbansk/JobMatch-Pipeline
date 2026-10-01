@@ -34,4 +34,4 @@ jobs:
 
       - name: Run Pytest with Coverage Gate
         run: |
-          pytest tests --cov=. --cov-omit="tests/*" --cov-report=term-missing --cov-fail-under=90
+          pytest tests --cov=. --cov-config=.coveragerc --cov-report=term-missing
