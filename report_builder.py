@@ -28,7 +28,8 @@ def generate_html_report(data_path="output/report_data.json",
         # Look for 'pdf_filename', 'cover_letter_pdf', or 'pdf_path' on the item
         raw_pdf = item.get("pdf_filename") or item.get("cover_letter_pdf") or item.get("pdf_path")
         
-        if raw_pdf:
+        # Treat '#' as a sentinel for "no PDF" (used by test fixtures)
+        if raw_pdf and raw_pdf != "#":
             filename = Path(raw_pdf).name
             formatted_path = f"pdfs/{filename}"
 

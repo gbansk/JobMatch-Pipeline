@@ -182,9 +182,9 @@ def test_pdf_rendering_cli_entrypoint():
     with patch("test_pdf_rendering.test_fast_pdf_generation") as mock_test:
         import test_pdf_rendering
         # Simulate running via `python tests/test_pdf_rendering.py`
-        if __name__ == "__main__":
-            test_pdf_rendering.test_fast_pdf_generation()
-            assert mock_test.called
+        # Invoke the entrypoint unconditionally so pytest actually exercises it.
+        test_pdf_rendering.test_fast_pdf_generation()
+        assert mock_test.called
 
 if __name__ == "__main__":
     test_fast_pdf_generation()

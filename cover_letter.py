@@ -211,4 +211,4 @@ def extract_cover_letter_body(body_text: str) -> str:
             except json.JSONDecodeError:
                 pass
 
-return re.sub(r'^```(?:json)?\s*|\s*```$', '', body_text.strip(), flags=re.MULTILINE)
+    return re.sub(r'^```(?:json)?\s*|\s*```$', '', body_text.strip(), flags=re.MULTILINE)
