@@ -32,6 +32,7 @@ from pipeline_state import (
     parse_start_date,
     resolve_results_wanted,
     save_last_fetch_timestamp,
+    start_of_utc_day,
 )
 from report_builder import generate_html_report
 
@@ -83,6 +84,7 @@ def run_linkedin_scraper(
         sys.exit(1)
 
     print(f"🌐 Scraping LinkedIn for '{search_term}' in '{location}' (Target: {results_wanted})...")
+    scrape_started_at = datetime.now(timezone.utc)
 
     try:
         jobs_df = scrape_jobs(
@@ -125,7 +127,7 @@ def run_linkedin_scraper(
         return 0
 
     if state_file is not None:
-        save_last_fetch_timestamp(datetime.now(timezone.utc), state_file)
+        save_last_fetch_timestamp(scrape_started_at, state_file)
 
     return inserted_count
 
@@ -319,7 +321,11 @@ def main():
         last_fetch_timestamp = (
             load_last_fetch_timestamp(DEFAULT_STATE_FILE) if args.since_last else None
         )
-        start_date = last_fetch_timestamp if args.since_last else args.since_date
+        start_date = (
+            start_of_utc_day(last_fetch_timestamp)
+            if last_fetch_timestamp is not None
+            else args.since_date
+        )
         results_wanted = resolve_results_wanted(args.count, last_fetch_timestamp)
         run_linkedin_scraper(
             search_term=args.search,

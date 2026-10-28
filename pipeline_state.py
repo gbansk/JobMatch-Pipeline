@@ -50,6 +50,16 @@ def parse_start_date(value: str) -> datetime:
     return datetime.combine(date.fromisoformat(value), time.min, tzinfo=timezone.utc)
 
 
+def start_of_utc_day(timestamp: datetime) -> datetime:
+    """Round a timezone-aware timestamp down to the start of its UTC day."""
+    if timestamp.tzinfo is None:
+        raise ValueError("timestamp must be timezone-aware")
+
+    return datetime.combine(
+        timestamp.astimezone(timezone.utc).date(), time.min, tzinfo=timezone.utc
+    )
+
+
 def resolve_results_wanted(
     explicit_count: int | None,
     last_fetch_timestamp: datetime | None,
@@ -86,10 +96,10 @@ def filter_jobs_by_start_date(
     if not date_columns:
         return jobs.iloc[0:0].copy()
 
-    ad_dates = pd.to_datetime(jobs[date_columns[0]], errors="coerce", utc=True)
-    for column in date_columns[1:]:
-        ad_dates = ad_dates.fillna(
-            pd.to_datetime(jobs[column], errors="coerce", utc=True)
-        )
+    matching_dates = pd.Series(False, index=jobs.index)
+    target_timestamp = pd.Timestamp(start_date)
+    for column in date_columns:
+        ad_dates = pd.to_datetime(jobs[column], errors="coerce", utc=True)
+        matching_dates |= ad_dates >= target_timestamp
 
-    return jobs.loc[ad_dates >= pd.Timestamp(start_date)].copy()
+    return jobs.loc[matching_dates].copy()

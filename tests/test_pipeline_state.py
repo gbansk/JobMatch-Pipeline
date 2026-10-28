@@ -9,6 +9,7 @@ from pipeline_state import (
     parse_start_date,
     resolve_results_wanted,
     save_last_fetch_timestamp,
+    start_of_utc_day,
 )
 
 
@@ -52,12 +53,22 @@ def test_filter_jobs_by_start_date_includes_date_boundary_and_updated_fallback()
                 "date_posted": None,
                 "date_updated": "2026-10-01T10:00:00Z",
             },
+            {
+                "id": "updated-after-posting",
+                "date_posted": "2026-09-30T10:00:00Z",
+                "date_updated": "2026-10-01T10:00:00Z",
+            },
         ]
     )
 
     filtered = filter_jobs_by_start_date(jobs, parse_start_date("2026-10-01"))
 
-    assert filtered["id"].tolist() == ["boundary", "after", "updated"]
+    assert filtered["id"].tolist() == [
+        "boundary",
+        "after",
+        "updated",
+        "updated-after-posting",
+    ]
 
 
 def test_filter_jobs_by_start_date_returns_original_jobs_without_target_date():
@@ -80,6 +91,17 @@ def test_filter_jobs_by_start_date_rejects_naive_date_and_unknown_date_columns()
 def test_parse_start_date_rejects_invalid_date():
     with pytest.raises(ValueError):
         parse_start_date("2026-10-32")
+
+
+def test_start_of_utc_day_uses_utc_date():
+    timestamp = datetime.fromisoformat("2026-10-01T01:00:00+10:00")
+
+    assert start_of_utc_day(timestamp) == datetime(2026, 9, 30, tzinfo=timezone.utc)
+
+
+def test_start_of_utc_day_rejects_naive_timestamp():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        start_of_utc_day(datetime(2026, 10, 1))
 
 
 def test_resolve_results_wanted_uses_default_for_first_run_or_explicit_count():

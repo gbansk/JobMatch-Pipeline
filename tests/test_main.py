@@ -105,9 +105,12 @@ def test_run_linkedin_scraper_empty_dataframe(mock_scrape):
 @patch("main.scrape_jobs")
 @patch("main.is_duplicate", return_value=False)
 @patch("main.save_job")
+@patch("main.datetime")
 def test_run_linkedin_scraper_filters_ads_and_saves_state(
-    mock_save, mock_is_dup, mock_scrape, mock_save_state, tmp_path
+    mock_datetime, mock_save, mock_is_dup, mock_scrape, mock_save_state, tmp_path
 ):
+    scrape_started_at = main.parse_start_date("2026-10-01")
+    mock_datetime.now.return_value = scrape_started_at
     mock_scrape.return_value = pd.DataFrame(
         [
             {
@@ -134,14 +137,23 @@ def test_run_linkedin_scraper_filters_ads_and_saves_state(
 
     assert count == 1
     assert mock_save.call_args.kwargs["job_id"] == "boundary"
-    mock_save_state.assert_called_once()
+    mock_save_state.assert_called_once_with(
+        scrape_started_at, tmp_path / ".pipeline_state.json"
+    )
 
 
+@patch("main.save_last_fetch_timestamp")
 @patch("main.scrape_jobs")
-def test_run_linkedin_scraper_exception_handling(mock_scrape):
+def test_run_linkedin_scraper_exception_handling(
+    mock_scrape, mock_save_state, tmp_path
+):
     mock_scrape.side_effect = Exception("API rate limit exceeded")
-    count = main.run_linkedin_scraper("Software", "Australia")
+    count = main.run_linkedin_scraper(
+        "Software", "Australia", state_file=tmp_path / ".pipeline_state.json"
+    )
+
     assert count == 0
+    mock_save_state.assert_not_called()
 
 
 # --- Tests for generate_html_report ---
@@ -314,7 +326,7 @@ def test_main_passes_explicit_since_date_to_scraper(
 def test_main_loads_last_fetch_timestamp_for_since_last(
     mock_init, mock_load_timestamp, mock_scrape, mock_pipeline, sample_profile_dir
 ):
-    timestamp = main.parse_start_date("2000-01-01")
+    timestamp = main.parse_start_date("2000-01-01").replace(hour=12)
     mock_load_timestamp.return_value = timestamp
     test_args = ["main.py", "--profiles", sample_profile_dir, "--since-last"]
 
@@ -322,7 +334,9 @@ def test_main_loads_last_fetch_timestamp_for_since_last(
         main.main()
 
     mock_load_timestamp.assert_called_once_with(main.DEFAULT_STATE_FILE)
-    assert mock_scrape.call_args.kwargs["start_date"] == timestamp
+    assert mock_scrape.call_args.kwargs["start_date"] == main.parse_start_date(
+        "2000-01-01"
+    )
     assert mock_scrape.call_args.kwargs["results_wanted"] == 100
 
 
