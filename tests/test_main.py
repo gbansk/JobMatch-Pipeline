@@ -101,6 +101,42 @@ def test_run_linkedin_scraper_empty_dataframe(mock_scrape):
     assert count == 0
 
 
+@patch("main.save_last_fetch_timestamp")
+@patch("main.scrape_jobs")
+@patch("main.is_duplicate", return_value=False)
+@patch("main.save_job")
+def test_run_linkedin_scraper_filters_ads_and_saves_state(
+    mock_save, mock_is_dup, mock_scrape, mock_save_state, tmp_path
+):
+    mock_scrape.return_value = pd.DataFrame(
+        [
+            {
+                "id": "before",
+                "company": "Co A",
+                "title": "Developer",
+                "date_posted": "2026-09-30T23:59:59Z",
+            },
+            {
+                "id": "boundary",
+                "company": "Co B",
+                "title": "Engineer",
+                "date_posted": "2026-10-01T00:00:00Z",
+            },
+        ]
+    )
+
+    count = main.run_linkedin_scraper(
+        "Software",
+        "Australia",
+        start_date=main.parse_start_date("2026-10-01"),
+        state_file=tmp_path / ".pipeline_state.json",
+    )
+
+    assert count == 1
+    assert mock_save.call_args.kwargs["job_id"] == "boundary"
+    mock_save_state.assert_called_once()
+
+
 @patch("main.scrape_jobs")
 def test_run_linkedin_scraper_exception_handling(mock_scrape):
     mock_scrape.side_effect = Exception("API rate limit exceeded")
@@ -246,3 +282,61 @@ def test_main_skip_scrape_flag(mock_init, mock_scrape, mock_pipeline, sample_pro
     mock_init.assert_called_once()
     mock_scrape.assert_not_called()
     mock_pipeline.assert_called_once()
+
+
+@patch("main.run_pipeline")
+@patch("main.run_linkedin_scraper")
+@patch("main.init_db")
+def test_main_passes_explicit_since_date_to_scraper(
+    mock_init, mock_scrape, mock_pipeline, sample_profile_dir
+):
+    test_args = [
+        "main.py",
+        "--profiles",
+        sample_profile_dir,
+        "--since-date",
+        "2026-10-01",
+    ]
+
+    with patch.object(sys, "argv", test_args):
+        main.main()
+
+    assert mock_scrape.call_args.kwargs["start_date"] == main.parse_start_date(
+        "2026-10-01"
+    )
+    assert mock_scrape.call_args.kwargs["results_wanted"] == 15
+
+
+@patch("main.run_pipeline")
+@patch("main.run_linkedin_scraper")
+@patch("main.load_last_fetch_timestamp")
+@patch("main.init_db")
+def test_main_loads_last_fetch_timestamp_for_since_last(
+    mock_init, mock_load_timestamp, mock_scrape, mock_pipeline, sample_profile_dir
+):
+    timestamp = main.parse_start_date("2000-01-01")
+    mock_load_timestamp.return_value = timestamp
+    test_args = ["main.py", "--profiles", sample_profile_dir, "--since-last"]
+
+    with patch.object(sys, "argv", test_args):
+        main.main()
+
+    mock_load_timestamp.assert_called_once_with(main.DEFAULT_STATE_FILE)
+    assert mock_scrape.call_args.kwargs["start_date"] == timestamp
+    assert mock_scrape.call_args.kwargs["results_wanted"] == 100
+
+
+def test_main_rejects_multiple_incremental_date_options(sample_profile_dir):
+    test_args = [
+        "main.py",
+        "--profiles",
+        sample_profile_dir,
+        "--since-last",
+        "--since-date",
+        "2026-10-01",
+    ]
+
+    with patch.object(sys, "argv", test_args), pytest.raises(SystemExit) as exc_info:
+        main.main()
+
+    assert exc_info.value.code == 2
