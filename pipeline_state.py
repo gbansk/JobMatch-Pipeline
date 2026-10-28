@@ -1,7 +1,6 @@
 """State persistence and date filtering for incremental job fetching."""
 
 import json
-import math
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
@@ -13,13 +12,23 @@ DEFAULT_RESULTS_WANTED = 15
 MAX_AUTO_RESULTS_WANTED = 100
 
 
+def _state_key(search_term: str, location: str) -> str:
+    return json.dumps(
+        [search_term.strip().casefold(), location.strip().casefold()],
+        ensure_ascii=False,
+    )
+
+
 def load_last_fetch_timestamp(
+    search_term: str,
+    location: str,
     state_file: str | Path = DEFAULT_STATE_FILE,
 ) -> datetime | None:
-    """Load the last successful fetch timestamp, if a valid state file exists."""
+    """Load the timestamp for a search/location pair, if available."""
     try:
         with Path(state_file).open(encoding="utf-8") as file:
-            timestamp = json.load(file)["last_fetch_timestamp"]
+            state = json.load(file)
+        timestamp = state["last_fetch_timestamps"][_state_key(search_term, location)]
         loaded_timestamp = datetime.fromisoformat(timestamp)
     except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
@@ -32,17 +41,34 @@ def load_last_fetch_timestamp(
 
 def save_last_fetch_timestamp(
     timestamp: datetime,
+    search_term: str,
+    location: str,
     state_file: str | Path = DEFAULT_STATE_FILE,
 ) -> None:
-    """Save a timezone-aware timestamp as UTC ISO 8601 state."""
+    """Save a UTC timestamp for a search/location pair."""
     if timestamp.tzinfo is None:
         raise ValueError("timestamp must be timezone-aware")
 
+    state_path = Path(state_file)
+    try:
+        with state_path.open(encoding="utf-8") as file:
+            state = json.load(file)
+    except FileNotFoundError:
+        state = {}
+    except json.JSONDecodeError:
+        state = {}
+
+    if not isinstance(state, dict):
+        state = {}
+    timestamps = state.get("last_fetch_timestamps", {})
+    if not isinstance(timestamps, dict):
+        timestamps = {}
+    timestamps[_state_key(search_term, location)] = timestamp.astimezone(
+        timezone.utc
+    ).isoformat()
+
     with Path(state_file).open("w", encoding="utf-8") as file:
-        json.dump(
-            {"last_fetch_timestamp": timestamp.astimezone(timezone.utc).isoformat()},
-            file,
-        )
+        json.dump({"last_fetch_timestamps": timestamps}, file)
 
 
 def parse_start_date(value: str) -> datetime:
@@ -74,10 +100,16 @@ def resolve_results_wanted(
         raise ValueError("last_fetch_timestamp must be timezone-aware")
 
     current_time = now or datetime.now(timezone.utc)
-    elapsed_seconds = max(
-        0, (current_time - last_fetch_timestamp.astimezone(timezone.utc)).total_seconds()
+    if current_time.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+
+    elapsed_days = max(
+        1,
+        (
+            current_time.astimezone(timezone.utc).date()
+            - last_fetch_timestamp.astimezone(timezone.utc).date()
+        ).days,
     )
-    elapsed_days = max(1, math.ceil(elapsed_seconds / 86_400))
     return min(DEFAULT_RESULTS_WANTED * elapsed_days, MAX_AUTO_RESULTS_WANTED)
 
 

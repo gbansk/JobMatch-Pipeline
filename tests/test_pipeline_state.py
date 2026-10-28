@@ -17,29 +17,87 @@ def test_save_and_load_last_fetch_timestamp(tmp_path):
     state_file = tmp_path / ".pipeline_state.json"
     timestamp = datetime(2026, 10, 1, 12, 30, tzinfo=timezone.utc)
 
-    save_last_fetch_timestamp(timestamp, state_file)
+    save_last_fetch_timestamp(timestamp, "Software Engineer", "Melbourne", state_file)
 
-    assert load_last_fetch_timestamp(state_file) == timestamp
+    assert (
+        load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file)
+        == timestamp
+    )
 
 
 def test_load_last_fetch_timestamp_returns_none_when_file_missing(tmp_path):
-    assert load_last_fetch_timestamp(tmp_path / ".pipeline_state.json") is None
+    assert (
+        load_last_fetch_timestamp(
+            "Software Engineer", "Melbourne", tmp_path / ".pipeline_state.json"
+        )
+        is None
+    )
 
 
-def test_load_last_fetch_timestamp_returns_none_for_naive_timestamp(tmp_path):
+def test_load_last_fetch_timestamp_returns_none_for_legacy_or_naive_state(tmp_path):
     state_file = tmp_path / ".pipeline_state.json"
     state_file.write_text(
         '{"last_fetch_timestamp": "2026-10-01T12:30:00"}', encoding="utf-8"
     )
 
-    assert load_last_fetch_timestamp(state_file) is None
+    assert load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file) is None
+
+    state_file.write_text(
+        '{"last_fetch_timestamps": {"[\\"software engineer\\", \\"melbourne\\"]": "2026-10-01T12:30:00"}}',
+        encoding="utf-8",
+    )
+
+    assert load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file) is None
 
 
 def test_save_last_fetch_timestamp_rejects_naive_timestamp(tmp_path):
     with pytest.raises(ValueError, match="timezone-aware"):
         save_last_fetch_timestamp(
-            datetime(2026, 10, 1, 12, 30), tmp_path / ".pipeline_state.json"
+            datetime(2026, 10, 1, 12, 30),
+            "Software Engineer",
+            "Melbourne",
+            tmp_path / ".pipeline_state.json",
         )
+
+
+def test_save_last_fetch_timestamp_keeps_checkpoints_separate_by_search(tmp_path):
+    state_file = tmp_path / ".pipeline_state.json"
+    first_timestamp = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    second_timestamp = datetime(2026, 10, 2, tzinfo=timezone.utc)
+
+    save_last_fetch_timestamp(
+        first_timestamp, "Software Engineer", "Melbourne", state_file
+    )
+    save_last_fetch_timestamp(second_timestamp, "Product Manager", "Sydney", state_file)
+
+    assert (
+        load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file)
+        == first_timestamp
+    )
+    assert (
+        load_last_fetch_timestamp("Product Manager", "Sydney", state_file)
+        == second_timestamp
+    )
+    assert load_last_fetch_timestamp("Product Manager", "Melbourne", state_file) is None
+
+
+@pytest.mark.parametrize(
+    "state_content",
+    ["[]", "not valid JSON", '{"last_fetch_timestamps": []}'],
+)
+def test_save_last_fetch_timestamp_replaces_invalid_state_content(
+    tmp_path, state_content
+):
+    state_file = tmp_path / ".pipeline_state.json"
+    timestamp = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    state_file.write_text(state_content, encoding="utf-8")
+
+    save_last_fetch_timestamp(timestamp, "Software Engineer", "Melbourne", state_file)
+
+    assert (
+        load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file)
+        == timestamp
+    )
 
 
 def test_filter_jobs_by_start_date_includes_date_boundary_and_updated_fallback():
@@ -116,7 +174,7 @@ def test_resolve_results_wanted_scales_by_elapsed_days_and_caps_at_100():
         resolve_results_wanted(
             None,
             last_fetch_timestamp,
-            now=datetime(2026, 10, 2, tzinfo=timezone.utc),
+            now=datetime(2026, 10, 2, 0, 0, 1, tzinfo=timezone.utc),
         )
         == 15
     )
@@ -141,3 +199,12 @@ def test_resolve_results_wanted_scales_by_elapsed_days_and_caps_at_100():
 def test_resolve_results_wanted_rejects_naive_last_fetch_timestamp():
     with pytest.raises(ValueError, match="timezone-aware"):
         resolve_results_wanted(None, datetime(2026, 10, 1))
+
+
+def test_resolve_results_wanted_rejects_naive_current_time():
+    with pytest.raises(ValueError, match="timezone-aware"):
+        resolve_results_wanted(
+            None,
+            datetime(2026, 10, 1, tzinfo=timezone.utc),
+            now=datetime(2026, 10, 2),
+        )

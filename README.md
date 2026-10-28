@@ -242,7 +242,7 @@ Scrape LinkedIn for target roles, evaluate matches with Ollama, generate cover l
 
 ### Incremental Scrape Limits
 
-When `--since-last` is used without `--count`, the scraper automatically requests 15 results per elapsed UTC day since the previous successful scrape, capped at 100 results. A normal daily run therefore requests 15 results; a delayed run fetches a broader set of candidates without exceeding the cap. A missing or invalid `.pipeline_state.json` uses the normal 15-result default.
+When `--since-last` is used without `--count`, the scraper automatically requests 15 results per UTC calendar day crossed since the previous successful scrape, capped at 100 results. A normal daily run therefore requests 15 results; a delayed run fetches a broader set of candidates without exceeding the cap. `.pipeline_state.json` stores independent checkpoints per search term and location, so a new search starts with the normal 15-result default.
 
 Pass `--count` to use a specific total instead:
 

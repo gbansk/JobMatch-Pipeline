@@ -127,7 +127,12 @@ def run_linkedin_scraper(
         return 0
 
     if state_file is not None:
-        save_last_fetch_timestamp(scrape_started_at, state_file)
+        try:
+            save_last_fetch_timestamp(
+                scrape_started_at, search_term, location, state_file
+            )
+        except OSError as error:
+            print(f"⚠️ Could not save incremental state: {error}")
 
     return inserted_count
 
@@ -319,7 +324,11 @@ def main():
     # Step 2: Scrape jobs unless skipped
     if not args.skip_scrape:
         last_fetch_timestamp = (
-            load_last_fetch_timestamp(DEFAULT_STATE_FILE) if args.since_last else None
+            load_last_fetch_timestamp(
+                args.search, args.location, DEFAULT_STATE_FILE
+            )
+            if args.since_last
+            else None
         )
         start_date = (
             start_of_utc_day(last_fetch_timestamp)

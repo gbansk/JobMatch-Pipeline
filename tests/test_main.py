@@ -138,7 +138,10 @@ def test_run_linkedin_scraper_filters_ads_and_saves_state(
     assert count == 1
     assert mock_save.call_args.kwargs["job_id"] == "boundary"
     mock_save_state.assert_called_once_with(
-        scrape_started_at, tmp_path / ".pipeline_state.json"
+        scrape_started_at,
+        "Software",
+        "Australia",
+        tmp_path / ".pipeline_state.json",
     )
 
 
@@ -154,6 +157,22 @@ def test_run_linkedin_scraper_exception_handling(
 
     assert count == 0
     mock_save_state.assert_not_called()
+
+
+@patch("main.save_last_fetch_timestamp", side_effect=OSError("disk full"))
+@patch("main.scrape_jobs")
+def test_run_linkedin_scraper_continues_when_state_save_fails(
+    mock_scrape, mock_save_state, tmp_path, capsys
+):
+    mock_scrape.return_value = pd.DataFrame()
+
+    count = main.run_linkedin_scraper(
+        "Software", "Australia", state_file=tmp_path / ".pipeline_state.json"
+    )
+
+    assert count == 0
+    assert "Could not save incremental state: disk full" in capsys.readouterr().out
+    mock_save_state.assert_called_once()
 
 
 # --- Tests for generate_html_report ---
@@ -333,7 +352,9 @@ def test_main_loads_last_fetch_timestamp_for_since_last(
     with patch.object(sys, "argv", test_args):
         main.main()
 
-    mock_load_timestamp.assert_called_once_with(main.DEFAULT_STATE_FILE)
+    mock_load_timestamp.assert_called_once_with(
+        "Software Engineer", "Melbourne, Australia", main.DEFAULT_STATE_FILE
+    )
     assert mock_scrape.call_args.kwargs["start_date"] == main.parse_start_date(
         "2000-01-01"
     )
