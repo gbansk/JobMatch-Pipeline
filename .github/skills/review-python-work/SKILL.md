@@ -37,6 +37,26 @@ to address any issue found; do not broaden scope or alter unrelated work.
   state, and resource leaks.
 - Use context managers for files, connections, and other managed resources.
 
+## Persistent state and incremental workflows
+
+When a feature persists state, checkpoints, cursors, or watermarks:
+
+- Scope persisted values by every input that changes the result set.
+- Write replacements to a temporary file in the same directory, then atomically
+  replace the prior file only after the new file closes successfully.
+- Verify read and write I/O failures are explicit and preserve a safe fallback
+  without stopping unrelated downstream work.
+- Test malformed, incomplete, and failed-replacement state files.
+
+When a feature processes an incremental time window:
+
+- Confirm the checkpoint is captured at the correct operation boundary.
+- Match cutoff precision to source data; use an inclusive overlap when source
+  timestamps are less precise than the checkpoint.
+- Base calendar-oriented limits on calendar boundaries, not rounded elapsed
+  durations.
+- Add boundary tests for scheduling drift and time-zone transitions.
+
 ## Security and operational checks
 
 - Validate untrusted input at system boundaries.

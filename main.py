@@ -8,7 +8,7 @@ Full JobMatch Pipeline:
 """
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import glob
 import json
 import os
@@ -25,6 +25,15 @@ from db import (
 )
 from evaluator import evaluate_job
 from cover_letter import render_latex_cover_letter
+from pipeline_state import (
+    DEFAULT_STATE_FILE,
+    filter_jobs_by_start_date,
+    load_last_fetch_timestamp,
+    parse_start_date,
+    resolve_results_wanted,
+    save_last_fetch_timestamp,
+    start_of_utc_day,
+)
 from report_builder import generate_html_report
 
 try:
@@ -62,13 +71,20 @@ def load_profiles(profiles_dir: str = "profiles") -> list[dict]:
     return profiles
 
 
-def run_linkedin_scraper(search_term: str, location: str, results_wanted: int = 15) -> int:
+def run_linkedin_scraper(
+    search_term: str,
+    location: str,
+    results_wanted: int = 15,
+    start_date: datetime | None = None,
+    state_file: str | Path | None = None,
+) -> int:
     """Scrapes LinkedIn listings and saves non-duplicate records to jobs.db."""
     if not JOBSPY_AVAILABLE:
         print("❌ Error: 'python-jobspy' is not installed. Run `pip install python-jobspy`.")
         sys.exit(1)
 
     print(f"🌐 Scraping LinkedIn for '{search_term}' in '{location}' (Target: {results_wanted})...")
+    scrape_started_at = datetime.now(timezone.utc)
 
     try:
         jobs_df = scrape_jobs(
@@ -81,7 +97,10 @@ def run_linkedin_scraper(search_term: str, location: str, results_wanted: int = 
 
         if jobs_df.empty:
             print("⚠️ No jobs returned from scraper.")
-            return 0
+        else:
+            jobs_df = filter_jobs_by_start_date(jobs_df, start_date)
+            if jobs_df.empty:
+                print("⚠️ No jobs met the requested date filter.")
 
         inserted_count = 0
         for _, row in jobs_df.iterrows():
@@ -103,10 +122,19 @@ def run_linkedin_scraper(search_term: str, location: str, results_wanted: int = 
                 inserted_count += 1
 
         print(f"📥 Saved {inserted_count} new job(s) to SQLite database.")
-        return inserted_count
     except Exception as e:
         print(f"❌ Scraper error: {e}")
         return 0
+
+    if state_file is not None:
+        try:
+            save_last_fetch_timestamp(
+                scrape_started_at, search_term, location, state_file
+            )
+        except OSError as error:
+            print(f"⚠️ Could not save incremental state: {error}")
+
+    return inserted_count
 
 
 def run_pipeline(
@@ -246,7 +274,10 @@ def main():
         "-l", "--location", default="Melbourne, Australia", help="Search location"
     )
     parser.add_argument(
-        "-n", "--count", type=int, default=15, help="Number of jobs to scrape"
+        "-n",
+        "--count",
+        type=int,
+        help="Number of jobs to scrape (overrides the adaptive --since-last default)",
     )
     parser.add_argument(
         "-p", "--profiles", default="profiles", help="Path to directory containing profile JSON files"
@@ -266,6 +297,18 @@ def main():
     parser.add_argument(
         "--skip-scrape", action="store_true", help="Skip scraping and process existing pending jobs in DB"
     )
+    date_filter_group = parser.add_mutually_exclusive_group()
+    date_filter_group.add_argument(
+        "--since-last",
+        action="store_true",
+        help="Fetch postings since the last successful scrape",
+    )
+    date_filter_group.add_argument(
+        "--since-date",
+        type=parse_start_date,
+        metavar="YYYY-MM-DD",
+        help="Fetch postings posted or updated on or after this UTC date",
+    )
 
     args = parser.parse_args()
 
@@ -280,10 +323,26 @@ def main():
 
     # Step 2: Scrape jobs unless skipped
     if not args.skip_scrape:
+        last_fetch_timestamp = None
+        if args.since_last:
+            try:
+                last_fetch_timestamp = load_last_fetch_timestamp(
+                    args.search, args.location, DEFAULT_STATE_FILE
+                )
+            except OSError as error:
+                print(f"⚠️ Could not load incremental state: {error}")
+        start_date = (
+            start_of_utc_day(last_fetch_timestamp)
+            if last_fetch_timestamp is not None
+            else args.since_date
+        )
+        results_wanted = resolve_results_wanted(args.count, last_fetch_timestamp)
         run_linkedin_scraper(
             search_term=args.search,
             location=args.location,
-            results_wanted=args.count
+            results_wanted=results_wanted,
+            start_date=start_date,
+            state_file=DEFAULT_STATE_FILE,
         )
 
     # Step 3: Run pipeline for pending database records through multi-profile evaluator
