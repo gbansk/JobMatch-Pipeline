@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -79,6 +80,29 @@ def test_save_last_fetch_timestamp_keeps_checkpoints_separate_by_search(tmp_path
         == second_timestamp
     )
     assert load_last_fetch_timestamp("Product Manager", "Melbourne", state_file) is None
+
+
+def test_save_last_fetch_timestamp_preserves_existing_state_on_replace_failure(tmp_path):
+    state_file = tmp_path / ".pipeline_state.json"
+    original_timestamp = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    save_last_fetch_timestamp(
+        original_timestamp, "Software Engineer", "Melbourne", state_file
+    )
+
+    with patch("pipeline_state.os.replace", side_effect=OSError("disk full")):
+        with pytest.raises(OSError, match="disk full"):
+            save_last_fetch_timestamp(
+                datetime(2026, 10, 2, tzinfo=timezone.utc),
+                "Software Engineer",
+                "Melbourne",
+                state_file,
+            )
+
+    assert (
+        load_last_fetch_timestamp("Software Engineer", "Melbourne", state_file)
+        == original_timestamp
+    )
+    assert not list(tmp_path.glob(".*.tmp"))
 
 
 @pytest.mark.parametrize(

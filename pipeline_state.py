@@ -1,6 +1,8 @@
 """State persistence and date filtering for incremental job fetching."""
 
 import json
+import os
+import tempfile
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
@@ -30,7 +32,13 @@ def load_last_fetch_timestamp(
             state = json.load(file)
         timestamp = state["last_fetch_timestamps"][_state_key(search_term, location)]
         loaded_timestamp = datetime.fromisoformat(timestamp)
-    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ):
         return None
 
     if loaded_timestamp.tzinfo is None:
@@ -67,8 +75,24 @@ def save_last_fetch_timestamp(
         timezone.utc
     ).isoformat()
 
-    with Path(state_file).open("w", encoding="utf-8") as file:
-        json.dump({"last_fetch_timestamps": timestamps}, file)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=state_path.parent,
+            prefix=f".{state_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
+            temporary_path = Path(file.name)
+            json.dump({"last_fetch_timestamps": timestamps}, file)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, state_path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def parse_start_date(value: str) -> datetime:

@@ -361,6 +361,23 @@ def test_main_loads_last_fetch_timestamp_for_since_last(
     assert mock_scrape.call_args.kwargs["results_wanted"] == 100
 
 
+@patch("main.run_pipeline")
+@patch("main.run_linkedin_scraper")
+@patch("main.load_last_fetch_timestamp", side_effect=OSError("permission denied"))
+@patch("main.init_db")
+def test_main_continues_when_state_load_fails(
+    mock_init, mock_load_timestamp, mock_scrape, mock_pipeline, sample_profile_dir, capsys
+):
+    test_args = ["main.py", "--profiles", sample_profile_dir, "--since-last"]
+
+    with patch.object(sys, "argv", test_args):
+        main.main()
+
+    assert "Could not load incremental state: permission denied" in capsys.readouterr().out
+    assert mock_scrape.call_args.kwargs["start_date"] is None
+    assert mock_scrape.call_args.kwargs["results_wanted"] == 15
+
+
 def test_main_rejects_multiple_incremental_date_options(sample_profile_dir):
     test_args = [
         "main.py",

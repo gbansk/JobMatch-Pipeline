@@ -323,13 +323,14 @@ def main():
 
     # Step 2: Scrape jobs unless skipped
     if not args.skip_scrape:
-        last_fetch_timestamp = (
-            load_last_fetch_timestamp(
-                args.search, args.location, DEFAULT_STATE_FILE
-            )
-            if args.since_last
-            else None
-        )
+        last_fetch_timestamp = None
+        if args.since_last:
+            try:
+                last_fetch_timestamp = load_last_fetch_timestamp(
+                    args.search, args.location, DEFAULT_STATE_FILE
+                )
+            except OSError as error:
+                print(f"⚠️ Could not load incremental state: {error}")
         start_date = (
             start_of_utc_day(last_fetch_timestamp)
             if last_fetch_timestamp is not None
