@@ -37,6 +37,7 @@ output/
 # Configuration & Personal Data
 .env
 user_preferences.json
+.pipeline_state.json
 
 # Ignore custom user profile configurations
 profiles/*.json

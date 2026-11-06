@@ -230,13 +230,25 @@ Scrape LinkedIn for target roles, evaluate matches with Ollama, generate cover l
 | :--- | :--- | :--- | :--- |
 | `--search` | `-s` | `"Software Engineer"` | Search query string or job title for LinkedIn scraper |
 | `--location` | `-l` | `"Melbourne, Australia"` | Target search location |
-| `--count` | `-n` | `15` | Target number of job listings to scrape |
+| `--count` | `-n` | `15`, or adaptive with `--since-last` | Target number of job listings to scrape; explicitly overrides the adaptive catch-up limit |
 | `--profiles` | `-p` | `"profiles"` | Directory containing profile JSON files |
 | `--model` | `-m` | `"llama3.2"` | Local Ollama model to execute |
 | `--template` | `-t` | `"cover_letter_template.tex"` | Base LaTeX cover letter template path |
 | `--outdir` | `-o` | `"output"` | Directory where generated reports and PDFs are written |
 | `--min-score` | | `70` | Minimum match fit score (0–100) required to compile a PDF cover letter |
 | `--skip-scrape`| | `False` | Skip scraping and process pending jobs already in `jobs.db` |
+| `--since-last` | | `False` | Fetch ads posted or updated since the last successful scrape; mutually exclusive with `--since-date` |
+| `--since-date` | | — | Fetch ads posted or updated on/after a UTC `YYYY-MM-DD` date; mutually exclusive with `--since-last` |
+
+### Incremental Scrape Limits
+
+When `--since-last` is used without `--count`, the scraper automatically requests 15 results per UTC calendar day crossed since the previous successful scrape, capped at 100 results. A normal daily run therefore requests 15 results; a delayed run fetches a broader set of candidates without exceeding the cap. `.pipeline_state.json` stores independent checkpoints per search term and location, so a new search starts with the normal 15-result default.
+
+Pass `--count` to use a specific total instead:
+
+```bash
+python3 main.py --since-last --count 50
+```
 
 ---
 
