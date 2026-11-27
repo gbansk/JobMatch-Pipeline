@@ -108,8 +108,6 @@ class OllamaClient:
 
     def generate(self, prompt: str, *, structured: bool = False) -> str:
         options: dict[str, Any] = {"temperature": 0}
-        if structured:
-            options["format"] = "json"
         data = self.http._post(
             self.url,
             headers={"Content-Type": "application/json"},
@@ -118,6 +116,7 @@ class OllamaClient:
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
                 "options": options,
+                **({"format": "json"} if structured else {}),
             },
         )
         try:

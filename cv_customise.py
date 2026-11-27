@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import re
 from typing import Any
 
 from llm_client import LLMClient, LLMResponseError, parse_json_response, sanitize_job_text
@@ -37,6 +38,44 @@ def _experience_key(cv: dict[str, Any]) -> str:
     return "experience" if "experience" in cv else "work"
 
 
+def _matching_base_skill(candidate: str, base_skills: list[str]) -> str | None:
+    normalized = candidate.strip().casefold()
+    if not normalized:
+        return None
+    for base_skill in base_skills:
+        base_normalized = base_skill.strip().casefold()
+        if normalized == base_normalized or re.search(
+            rf"(?<!\w){re.escape(normalized)}(?!\w)", base_normalized
+        ):
+            return base_skill
+    return None
+
+
+def _apply_skill_patch(result: dict[str, Any], patch: dict[str, Any]) -> None:
+    base_skills = result.get("skills", [])
+    if not isinstance(base_skills, list) or not all(isinstance(item, str) for item in base_skills):
+        return
+    requested_order = patch.get("skills_order", [])
+    if isinstance(requested_order, list):
+        ordered = []
+        for item in requested_order:
+            if not isinstance(item, str):
+                continue
+            matched = _matching_base_skill(item, base_skills)
+            if matched is not None and matched not in ordered:
+                ordered.append(matched)
+        result["skills"] = ordered + [item for item in base_skills if item not in ordered]
+    highlighted = patch.get("highlighted_skills")
+    if isinstance(highlighted, list):
+        result["highlighted_skills"] = [
+            matched
+            for item in highlighted
+            if isinstance(item, str)
+            for matched in [_matching_base_skill(item, base_skills)]
+            if matched is not None
+        ]
+
+
 def merge_cv_patch(base_cv: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """Return a validated deep-copied CV with only safe patch fields applied."""
     _validate_cv(base_cv)
@@ -45,11 +84,7 @@ def merge_cv_patch(base_cv: dict[str, Any], patch: dict[str, Any]) -> dict[str, 
     result = copy.deepcopy(base_cv)
     if "summary" in patch and isinstance(patch["summary"], str):
         result["summary"] = patch["summary"]
-    for field in ("skills_order", "highlighted_skills"):
-        if field in patch and isinstance(patch[field], list) and all(
-            isinstance(item, str) for item in patch[field]
-        ):
-            result[field] = list(patch[field])
+    _apply_skill_patch(result, patch)
     roles = result.get(_experience_key(result), [])
     updates = patch.get("experience_updates", {})
     if isinstance(updates, list):

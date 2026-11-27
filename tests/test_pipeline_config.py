@@ -33,6 +33,13 @@ def test_gemini_with_key_is_retained():
     assert config.stages["evaluate"].provider == "gemini"
 
 
+def test_gemini_uses_gemini_default_model():
+    config = PipelineConfig.from_mapping(
+        {"evaluate": {"provider": "gemini"}}, gemini_api_key="secret"
+    )
+    assert config.stages["evaluate"].model == "gemini-3.8-flash"
+
+
 def test_invalid_provider_fails_fast():
     with pytest.raises(ConfigurationError, match="Unsupported provider"):
         PipelineConfig.from_mapping({"evaluate": {"provider": "openai"}})

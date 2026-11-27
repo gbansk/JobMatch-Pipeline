@@ -77,6 +77,8 @@
             <div class="actions">
                 {% if job.pdf_filename %}
                 <a class="pdf-link" href="{{ job.pdf_filename }}" target="_blank">📄 View Cover Letter PDF</a>
+                {% elif job.cv_filename %}
+                <a class="pdf-link" href="{{ job.cv_filename }}" target="_blank">📄 View Customised CV</a>
                 {% else %}
                 <span></span>
                 {% endif %}

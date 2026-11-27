@@ -11,6 +11,7 @@ from typing import Any
 LOGGER = logging.getLogger(__name__)
 STAGES = ("evaluate", "cover_letter", "cv_customise")
 DEFAULT_OLLAMA_MODEL = "llama3.2"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 
 def configured_gemini_key() -> str:
@@ -67,7 +68,8 @@ class PipelineConfig:
                     f"Unsupported provider '{provider}' for stage '{stage}'. "
                     "Supported providers: ollama, gemini."
                 )
-            model = str(values.get("model", DEFAULT_OLLAMA_MODEL)).strip()
+            default_model = DEFAULT_GEMINI_MODEL if provider == "gemini" else DEFAULT_OLLAMA_MODEL
+            model = str(values.get("model", default_model)).strip()
             if not model:
                 raise ConfigurationError(f"Model for stage '{stage}' must not be empty")
             min_score = values.get("min_score")

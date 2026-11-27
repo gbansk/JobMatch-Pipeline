@@ -234,29 +234,40 @@ def run_pipeline(
 
         print(f"📊 Best Match Fit Score: {best_score}/100 ({best_profile['track']})")
 
+        selected_cv = best_profile["data"]
+        cv_filename = ""
+        if not legacy_mode and should_run_stage("cv_customise", best_score, config):
+            try:
+                selected_cv = customise_cv(
+                    selected_cv, description, clients["cv_customise"], config.max_job_chars
+                )
+                cv_dir = os.path.join(output_dir, "cvs")
+                os.makedirs(cv_dir, exist_ok=True)
+                cv_basename = f"CustomCV_{safe_company}_{safe_title}.json"
+                cv_path = os.path.join(cv_dir, cv_basename)
+                with open(cv_path, "w", encoding="utf-8") as handle:
+                    json.dump(selected_cv, handle, indent=2)
+                cv_filename = os.path.join("cvs", cv_basename)
+            except (LLMError, TypeError, ValueError, OSError) as error:
+                print(f"⚠️ CV customisation failed; using base CV: {error}")
+
         pdf_filename = ""
         if best_score >= min_score:
             status = "matched"
-            selected_cv = best_profile["data"]
             if not legacy_mode and should_run_stage("cover_letter", best_score, config):
-                cover_prompt = (
-                    "Return ONLY a JSON object with key cover_letter_body. "
-                    "Write three concise first-person paragraphs using this CV and job description.\n"
-                    f"CV: {selected_cv}\nJob description: {description[:config.max_job_chars]}"
-                )
-                cover_data = clients["cover_letter"].generate(cover_prompt, structured=True)
                 try:
+                    cover_prompt = (
+                        "Return ONLY a JSON object with key cover_letter_body. "
+                        "Write three concise first-person paragraphs using this CV and job description.\n"
+                        f"CV: {selected_cv}\nJob description: {description[:config.max_job_chars]}"
+                    )
+                    cover_data = clients["cover_letter"].generate(cover_prompt, structured=True)
                     parsed_cover = parse_json_response(cover_data)
-                    best_body_text = str(parsed_cover.get("cover_letter_body", best_body_text))
+                    cover_body = parsed_cover.get("cover_letter_body")
+                    if isinstance(cover_body, str) and cover_body.strip():
+                        best_body_text = cover_body.strip()
                 except (LLMError, TypeError, ValueError) as error:
                     print(f"⚠️ Cover-letter JSON was unusable; using evaluation text: {error}")
-            if not legacy_mode and should_run_stage("cv_customise", best_score, config):
-                try:
-                    selected_cv = customise_cv(
-                        selected_cv, description, clients["cv_customise"], config.max_job_chars
-                    )
-                except (LLMError, TypeError, ValueError) as error:
-                    print(f"⚠️ CV customisation failed; using base CV: {error}")
             render_latex_cover_letter(
                 cv_data=selected_cv,
                 body_text=best_body_text,
@@ -282,7 +293,8 @@ def run_pipeline(
             "key_alignments": best_alignments,
             "missing_skills": best_missing,
             "job_url": raw_url,
-            "pdf_filename": pdf_filename
+            "pdf_filename": pdf_filename,
+            "cv_filename": cv_filename,
         })
 
     if evaluated_results:

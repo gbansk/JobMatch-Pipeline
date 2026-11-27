@@ -37,7 +37,8 @@ def test_ollama_structured_success():
     client = OllamaClient("llama3.2:3b", session=session)
     assert client.generate("prompt", structured=True) == '{"fit_score": 90}'
     payload = session.post.call_args.kwargs["json"]
-    assert payload["options"]["format"] == "json"
+    assert payload["format"] == "json"
+    assert "format" not in payload["options"]
 
 
 def test_gemini_success_and_headers():

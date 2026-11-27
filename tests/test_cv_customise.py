@@ -60,6 +60,18 @@ def test_unknown_ids_and_factual_fields_are_ignored(base_cv, caplog):
     assert "factual CV field" in caplog.text
 
 
+def test_skill_order_is_limited_to_base_skills_and_preserves_omissions(base_cv):
+    result = merge_cv_patch(
+        base_cv,
+        {
+            "skills_order": ["Go", "Not in CV"],
+            "highlighted_skills": ["Python", "Invented skill"],
+        },
+    )
+    assert result["skills"] == ["Go", "Python"]
+    assert result["highlighted_skills"] == ["Python"]
+
+
 def test_customise_cv_accepts_fenced_json_and_filters_unknown_fields(base_cv, caplog):
     client = FakeClient('```json\n{"summary":"Tailored","unknown":"x"}\n```')
     with caplog.at_level(logging.WARNING):

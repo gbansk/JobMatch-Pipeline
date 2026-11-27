@@ -341,6 +341,78 @@ def test_run_pipeline_routes_configured_stages_and_gates(
     assert mock_render.call_args.kwargs["body_text"] == "Configured cover letter"
 
 
+def test_cv_customisation_runs_on_its_own_gate_and_persists_output(
+    monkeypatch, sample_profile_dir, tmp_path
+):
+    class FakeClient:
+        def __init__(self, response):
+            self.response = response
+
+        def generate(self, prompt, *, structured=False):
+            return self.response
+
+    config = main.PipelineConfig.from_mapping(
+        {"cv_customise": {"provider": "ollama", "model": "cv-model", "min_score": 60}}
+    )
+    monkeypatch.setattr(main, "get_unprocessed_jobs", lambda: [
+        {"id": "job-301", "title": "Engineer", "company": "Acme", "description": "Build APIs"}
+    ])
+    monkeypatch.setattr(
+        main,
+        "create_client",
+        lambda stage_config, **kwargs: FakeClient('{"summary": "Tailored"}'),
+    )
+    monkeypatch.setattr(
+        main, "evaluate_job", lambda **kwargs: ("Evaluation body", 65, [], [])
+    )
+    mock_render = MagicMock()
+    monkeypatch.setattr(main, "render_latex_cover_letter", mock_render)
+    monkeypatch.setattr(main, "update_job_status", MagicMock())
+    monkeypatch.setattr(main, "generate_html_report", MagicMock())
+
+    output_dir = tmp_path / "output"
+    main.run_pipeline(
+        sample_profile_dir, "ignored", "template.tex", str(output_dir),
+        pipeline_config=config,
+    )
+
+    cv_path = output_dir / "cvs" / "CustomCV_Acme_Engineer.json"
+    assert cv_path.exists()
+    assert json.loads(cv_path.read_text(encoding="utf-8"))["summary"] == "Tailored"
+    assert not mock_render.called
+
+
+def test_cover_letter_provider_failure_keeps_evaluation_body(
+    monkeypatch, sample_profile_dir, tmp_path, capsys
+):
+    class FailingClient:
+        def generate(self, prompt, *, structured=False):
+            raise main.LLMError("provider unavailable")
+
+    config = main.PipelineConfig.from_mapping(
+        {"cover_letter": {"provider": "ollama", "model": "letter-model", "min_score": 60}}
+    )
+    monkeypatch.setattr(main, "get_unprocessed_jobs", lambda: [
+        {"id": "job-302", "title": "Engineer", "company": "Acme", "description": "Build APIs"}
+    ])
+    monkeypatch.setattr(main, "create_client", lambda stage_config, **kwargs: FailingClient())
+    monkeypatch.setattr(
+        main, "evaluate_job", lambda **kwargs: ("Evaluation body", 80, [], [])
+    )
+    mock_render = MagicMock()
+    monkeypatch.setattr(main, "render_latex_cover_letter", mock_render)
+    monkeypatch.setattr(main, "update_job_status", MagicMock())
+    monkeypatch.setattr(main, "generate_html_report", MagicMock())
+
+    main.run_pipeline(
+        sample_profile_dir, "ignored", "template.tex", str(tmp_path / "output"),
+        pipeline_config=config,
+    )
+
+    assert mock_render.call_args.kwargs["body_text"] == "Evaluation body"
+    assert "using evaluation text" in capsys.readouterr().out
+
+
 # --- Tests for CLI main() ---
 
 def test_main_missing_profiles_directory(tmp_path):
