@@ -47,16 +47,18 @@ def test_invalid_provider_fails_fast():
 
 def test_config_file_and_invalid_values(tmp_path):
     path = tmp_path / "pipeline.json"
-    path.write_text(json.dumps({"max_job_chars": 50, "evaluate": {"min_score": 70}}))
+    path.write_text(json.dumps({"max_job_chars": 50, "cover_letter": {"min_score": 70}}))
     config = PipelineConfig.from_file(str(path))
     assert config.max_job_chars == 50
-    assert should_run_stage("evaluate", 70, config) is True
-    assert should_run_stage("evaluate", 69, config) is False
-    assert should_run_stage("evaluate", None, config) is False
+    assert should_run_stage("cover_letter", 70, config) is True
+    assert should_run_stage("cover_letter", 69, config) is False
+    assert should_run_stage("cover_letter", None, config) is False
     with pytest.raises(ConfigurationError):
         PipelineConfig.from_mapping({"evaluate": {"min_score": "bad"}})
     with pytest.raises(ConfigurationError):
         PipelineConfig.from_mapping({"max_job_chars": 0})
+    with pytest.raises(ConfigurationError, match="only supported"):
+        PipelineConfig.from_mapping({"evaluate": {"min_score": 70}})
 
 
 @pytest.mark.parametrize("score", [None, "bad"])

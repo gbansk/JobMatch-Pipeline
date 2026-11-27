@@ -73,6 +73,10 @@ class PipelineConfig:
             if not model:
                 raise ConfigurationError(f"Model for stage '{stage}' must not be empty")
             min_score = values.get("min_score")
+            if stage == "evaluate" and min_score is not None:
+                raise ConfigurationError(
+                    "min_score is only supported for cover_letter and cv_customise"
+                )
             if min_score is not None:
                 try:
                     min_score = float(min_score)

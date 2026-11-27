@@ -82,6 +82,9 @@ def sample_html_template(tmp_path):
             {% if job.pdf_filename %}
             <a href="{{ job.pdf_filename }}">PDF Link</a>
             {% endif %}
+            {% if job.cv_filename %}
+            <a href="{{ job.cv_filename }}">CV Link</a>
+            {% endif %}
         </div>
         {% endfor %}
     </body>
@@ -138,6 +141,33 @@ def test_generate_html_report_missing_data_file(tmp_path, sample_html_template):
             template_path=str(sample_html_template),
             output_path=str(output_html)
         )
+
+
+def test_report_renders_pdf_and_cv_links_independently(tmp_path, sample_html_template):
+    data_file = tmp_path / "report_data.json"
+    data_file.write_text(
+        json.dumps(
+            {
+                "jobs": [
+                    {
+                        "score": 90,
+                        "pdf_filename": "Letter.pdf",
+                        "cv_filename": "cvs/Custom.json",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_html = tmp_path / "report.html"
+    generate_html_report(
+        data_path=str(data_file),
+        template_path=str(sample_html_template),
+        output_path=str(output_html),
+    )
+    content = output_html.read_text(encoding="utf-8")
+    assert "pdfs/Letter.pdf" in content
+    assert "cvs/Custom.json" in content
 
 
 def test_generate_html_report_creates_output_directory(tmp_path, sample_report_data, sample_html_template):

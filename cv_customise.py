@@ -27,7 +27,9 @@ def build_cv_patch_prompt(base_cv: dict[str, Any], job_description: str, max_cha
         "Return ONLY a JSON object containing a CV patch. Allowed top-level fields are "
         "summary, skills_order, highlighted_skills, and experience_updates. "
         "Only reference the supplied role and bullet IDs. Never invent employers, roles, dates, "
-        "or unsupported facts.\n"
+        "or unsupported facts. Use experience_updates in this exact form: "
+        '{"role_id":{"bullet_updates":{"bullet_id":"replacement bullet text"}}}. '
+        "bullet_id values must be existing numeric indexes.\n"
         f"Available roles: {roles}\n"
         f"Job description:\n{sanitize_job_text(job_description, max_chars)}\n"
         f"Base CV:\n{json.dumps(base_cv, ensure_ascii=True)}"

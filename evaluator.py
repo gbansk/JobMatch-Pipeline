@@ -4,7 +4,7 @@ import re
 import subprocess
 from typing import Any
 
-from llm_client import LLMClient, sanitize_job_text
+from llm_client import LLMClient, LLMResponseError, sanitize_job_text
 
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 
@@ -80,7 +80,9 @@ def query_ollama(prompt: str, model: str = "llama3.2") -> str:
         raise RuntimeError(f"Ollama execution failed: {e}")
 
 
-def parse_llm_response(response: str) -> tuple[str, int, list[str], list[str]]:
+def parse_llm_response(
+    response: str, *, strict: bool = False
+) -> tuple[str, int, list[str], list[str]]:
     """Parses JSON response from LLM or falls back cleanly if response formatting deviates."""
     cleaned = response.strip()
     
@@ -92,18 +94,11 @@ def parse_llm_response(response: str) -> tuple[str, int, list[str], list[str]]:
 
     try:
         data = json.loads(cleaned)
-        score = int(data.get("fit_score", 75))
-        body_text = str(data.get("cover_letter_body", "")).strip()
-        key_alignments = data.get("key_alignments", [])
-        missing_skills = data.get("missing_skills", [])
-        
-        if not isinstance(key_alignments, list):
-            key_alignments = []
-        if not isinstance(missing_skills, list):
-            missing_skills = []
-
-        return body_text, score, key_alignments, missing_skills
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        if strict:
+            raise LLMResponseError(
+                "Configured evaluation returned malformed JSON"
+            ) from exc
         # Fallback for legacy FIT_SCORE text responses
         score = 75
         body_lines = []
@@ -117,6 +112,35 @@ def parse_llm_response(response: str) -> tuple[str, int, list[str], list[str]]:
 
         body_text = "\n".join(body_lines).strip()
         return body_text, score, [], []
+
+    if not isinstance(data, dict):
+        if strict:
+            raise LLMResponseError("Configured evaluation must return a JSON object")
+        return cleaned, 75, [], []
+
+    if strict:
+        fit_score = data.get("fit_score")
+        if (
+            isinstance(fit_score, bool)
+            or not isinstance(fit_score, (int, float))
+            or int(fit_score) != fit_score
+            or not 0 <= fit_score <= 100
+        ):
+            raise LLMResponseError(
+                "Configured evaluation fit_score must be an integer from 0 to 100"
+            )
+
+    score = int(data.get("fit_score", 75))
+    body_text = str(data.get("cover_letter_body", "")).strip()
+    key_alignments = data.get("key_alignments", [])
+    missing_skills = data.get("missing_skills", [])
+
+    if not isinstance(key_alignments, list):
+        key_alignments = []
+    if not isinstance(missing_skills, list):
+        missing_skills = []
+
+    return body_text, score, key_alignments, missing_skills
 
 
 def evaluate_job(
@@ -138,6 +162,8 @@ def evaluate_job(
         if llm_client is not None
         else query_ollama(prompt, model=model)
     )
-    body_text, fit_score, key_alignments, missing_skills = parse_llm_response(raw_response)
+    body_text, fit_score, key_alignments, missing_skills = parse_llm_response(
+        raw_response, strict=llm_client is not None
+    )
 
     return body_text, fit_score, key_alignments, missing_skills

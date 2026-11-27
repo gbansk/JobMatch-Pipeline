@@ -26,7 +26,7 @@ from db import (
 from evaluator import evaluate_job
 from cover_letter import render_latex_cover_letter
 from cv_customise import customise_cv
-from llm_client import LLMError, create_client, parse_json_response
+from llm_client import LLMError, create_client, parse_json_response, sanitize_job_text
 from pipeline_config import (
     ConfigurationError,
     PipelineConfig,
@@ -259,7 +259,8 @@ def run_pipeline(
                     cover_prompt = (
                         "Return ONLY a JSON object with key cover_letter_body. "
                         "Write three concise first-person paragraphs using this CV and job description.\n"
-                        f"CV: {selected_cv}\nJob description: {description[:config.max_job_chars]}"
+                        f"CV: {selected_cv}\nJob description: "
+                        f"{sanitize_job_text(description, config.max_job_chars)}"
                     )
                     cover_data = clients["cover_letter"].generate(cover_prompt, structured=True)
                     parsed_cover = parse_json_response(cover_data)

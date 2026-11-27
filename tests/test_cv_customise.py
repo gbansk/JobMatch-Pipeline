@@ -44,6 +44,11 @@ def test_prompt_sanitizes_job_and_merge_is_pure(base_cv):
     assert base_cv == original
 
 
+def test_prompt_documents_experience_update_shape(base_cv):
+    prompt = build_cv_patch_prompt(base_cv, "job")
+    assert '"role_id":{"bullet_updates":{"bullet_id":"replacement bullet text"}}' in prompt
+
+
 def test_unknown_ids_and_factual_fields_are_ignored(base_cv, caplog):
     with caplog.at_level(logging.WARNING):
         result = merge_cv_patch(
