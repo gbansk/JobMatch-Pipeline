@@ -292,6 +292,55 @@ def test_run_pipeline_low_score_skipped(
     mock_update.assert_called_once_with("job-200", status="skipped_low_score", score=55)
 
 
+def test_run_pipeline_routes_configured_stages_and_gates(
+    monkeypatch, sample_profile_dir, tmp_path
+):
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, prompt, *, structured=False):
+            self.calls.append((prompt, structured))
+            return '{"cover_letter_body": "Configured cover letter"}'
+
+    clients = {}
+
+    def make_client(stage_config, **kwargs):
+        client = FakeClient()
+        clients[stage_config.model] = client
+        return client
+
+    config = main.PipelineConfig.from_mapping(
+        {
+            "evaluate": {"provider": "ollama", "model": "evaluate-model"},
+            "cover_letter": {"provider": "ollama", "model": "letter-model", "min_score": 80},
+            "cv_customise": {"provider": "ollama", "model": "cv-model", "min_score": 90},
+        }
+    )
+    monkeypatch.setattr(main, "get_unprocessed_jobs", lambda: [
+        {"id": "job-300", "title": "Engineer", "company": "Acme", "description": "Build APIs"}
+    ])
+    monkeypatch.setattr(main, "create_client", make_client)
+    monkeypatch.setattr(
+        main, "evaluate_job", lambda **kwargs: ("Evaluation body", 80, [], [])
+    )
+    mock_render = MagicMock()
+    monkeypatch.setattr(main, "render_latex_cover_letter", mock_render)
+    monkeypatch.setattr(main, "update_job_status", MagicMock())
+    monkeypatch.setattr(main, "generate_html_report", MagicMock())
+
+    main.run_pipeline(
+        sample_profile_dir, "ignored", "template.tex", str(tmp_path / "output"),
+        pipeline_config=config,
+    )
+
+    assert set(clients) == {"evaluate-model", "letter-model", "cv-model"}
+    assert clients["evaluate-model"].calls == []
+    assert clients["letter-model"].calls[0][1] is True
+    assert clients["cv-model"].calls == []
+    assert mock_render.call_args.kwargs["body_text"] == "Configured cover letter"
+
+
 # --- Tests for CLI main() ---
 
 def test_main_missing_profiles_directory(tmp_path):

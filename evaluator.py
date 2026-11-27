@@ -2,6 +2,9 @@ import json
 import os
 import re
 import subprocess
+from typing import Any
+
+from llm_client import LLMClient, sanitize_job_text
 
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 
@@ -121,14 +124,20 @@ def evaluate_job(
     job_description: str,
     model: str = DEFAULT_OLLAMA_MODEL,
     template_path: str = "cover_letter_template.tex",
-    output_tex: str = "output/pdf/cover_letter.tex"
+    output_tex: str = "output/pdf/cover_letter.tex",
+    llm_client: LLMClient | None = None,
+    max_job_chars: int = 12000,
 ) -> tuple[str, int, list[str], list[str]]:
-    """Loads CV, queries Ollama, renders cover letter, and returns (body_text, score, key_alignments, missing_skills)."""
+    """Loads CV, queries the configured LLM, and returns evaluation details."""
     with open(cv_path, "r", encoding="utf-8") as f:
         cv_data = json.load(f)
 
-    prompt = build_ollama_prompt(cv_data, job_description)
-    raw_response = query_ollama(prompt, model=model)
+    prompt = build_ollama_prompt(cv_data, sanitize_job_text(job_description, max_job_chars))
+    raw_response = (
+        llm_client.generate(prompt, structured=True)
+        if llm_client is not None
+        else query_ollama(prompt, model=model)
+    )
     body_text, fit_score, key_alignments, missing_skills = parse_llm_response(raw_response)
 
     return body_text, fit_score, key_alignments, missing_skills

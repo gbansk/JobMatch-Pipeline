@@ -25,6 +25,14 @@ from db import (
 )
 from evaluator import evaluate_job
 from cover_letter import render_latex_cover_letter
+from cv_customise import customise_cv
+from llm_client import LLMError, create_client, parse_json_response
+from pipeline_config import (
+    ConfigurationError,
+    PipelineConfig,
+    configured_gemini_key,
+    should_run_stage,
+)
 from pipeline_state import (
     DEFAULT_STATE_FILE,
     filter_jobs_by_start_date,
@@ -142,7 +150,8 @@ def run_pipeline(
     model: str,
     template_path: str,
     output_dir: str,
-    min_score: int = 70
+    min_score: int = 70,
+    pipeline_config: PipelineConfig | None = None,
 ):
     """Processes pending jobs against all profiles, picks the highest-scoring track, generates PDF cover letters, and builds HTML report."""
     pending_jobs = get_unprocessed_jobs()
@@ -152,6 +161,18 @@ def run_pipeline(
         return
 
     profiles = load_profiles(profiles_dir)
+    legacy_mode = pipeline_config is None
+    config = pipeline_config or PipelineConfig.from_mapping(
+        {"evaluate": {"model": model}, "cover_letter": {"model": model}, "cv_customise": {"model": model}}
+    )
+    clients = {} if legacy_mode else {
+        stage: create_client(
+            config.stages[stage],
+            ollama_host=config.ollama_host,
+            gemini_api_key=configured_gemini_key(),
+        )
+        for stage in ("evaluate", "cover_letter", "cv_customise")
+    }
     print(f"📋 Found {len(pending_jobs)} unprocessed job(s) in queue.")
     print(f"📁 Loaded {len(profiles)} profile track(s): {[p['track'] for p in profiles]}\n")
 
@@ -190,7 +211,9 @@ def run_pipeline(
                     job_description=description,
                     model=model,
                     template_path=template_path,
-                    output_tex=output_tex
+                    output_tex=output_tex,
+                    llm_client=clients.get("evaluate"),
+                    max_job_chars=config.max_job_chars,
                 )
 
                 print(f"   ↳ Track '{profile['track']}': {fit_score}/100")
@@ -214,8 +237,28 @@ def run_pipeline(
         pdf_filename = ""
         if best_score >= min_score:
             status = "matched"
+            selected_cv = best_profile["data"]
+            if not legacy_mode and should_run_stage("cover_letter", best_score, config):
+                cover_prompt = (
+                    "Return ONLY a JSON object with key cover_letter_body. "
+                    "Write three concise first-person paragraphs using this CV and job description.\n"
+                    f"CV: {selected_cv}\nJob description: {description[:config.max_job_chars]}"
+                )
+                cover_data = clients["cover_letter"].generate(cover_prompt, structured=True)
+                try:
+                    parsed_cover = parse_json_response(cover_data)
+                    best_body_text = str(parsed_cover.get("cover_letter_body", best_body_text))
+                except (LLMError, TypeError, ValueError) as error:
+                    print(f"⚠️ Cover-letter JSON was unusable; using evaluation text: {error}")
+            if not legacy_mode and should_run_stage("cv_customise", best_score, config):
+                try:
+                    selected_cv = customise_cv(
+                        selected_cv, description, clients["cv_customise"], config.max_job_chars
+                    )
+                except (LLMError, TypeError, ValueError) as error:
+                    print(f"⚠️ CV customisation failed; using base CV: {error}")
             render_latex_cover_letter(
-                cv_data=best_profile["data"],
+                cv_data=selected_cv,
                 body_text=best_body_text,
                 template_path=template_path,
                 output_tex=output_tex,
@@ -295,6 +338,9 @@ def main():
         "--min-score", type=int, default=70, help="Minimum fit score threshold (0-100) to render cover letter"
     )
     parser.add_argument(
+        "--config", default=None, help="Optional JSON file configuring evaluate, cover_letter, and cv_customise stages"
+    )
+    parser.add_argument(
         "--skip-scrape", action="store_true", help="Skip scraping and process existing pending jobs in DB"
     )
     date_filter_group = parser.add_mutually_exclusive_group()
@@ -346,12 +392,28 @@ def main():
         )
 
     # Step 3: Run pipeline for pending database records through multi-profile evaluator
+    try:
+        pipeline_config = (
+            PipelineConfig.from_file(args.config)
+            if args.config
+            else PipelineConfig.from_mapping(
+                {
+                    "evaluate": {"model": args.model},
+                    "cover_letter": {"model": args.model},
+                    "cv_customise": {"model": args.model},
+                }
+            )
+        )
+    except (OSError, ValueError, ConfigurationError) as error:
+        parser.error(f"Invalid pipeline configuration: {error}")
+
     run_pipeline(
         profiles_dir=args.profiles,
         model=args.model,
         template_path=args.template,
         output_dir=args.outdir,
-        min_score=args.min_score
+        min_score=args.min_score,
+        pipeline_config=pipeline_config,
     )
 
     print("\n🎉 Pipeline run complete!")
