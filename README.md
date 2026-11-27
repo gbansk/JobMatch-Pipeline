@@ -6,7 +6,8 @@ An end-to-end Python pipeline designed to automate job discovery, fit analysis, 
 
 ### Key Features
 * **Automated Job Scraping & Deduplication:** Ingests live job listings into a local SQLite database, automatically filtering out duplicates.
-* **Multi-Track Profile Evaluation:** Evaluates each job description against multiple CV profiles (e.g., Developer vs. Management) using local LLMs via Ollama to compute fit scores and skill alignments.
+* **Multi-Track Profile Evaluation:** Evaluates each job description against multiple CV profiles (e.g., Developer vs. Management) using a configurable Ollama/Gemini provider per stage.
+* **CV Customisation:** Generates a constrained JSON patch and deterministically merges only safe, existing CV fields; employment history is never invented or rewritten.
 * **Dynamic LaTeX Cover Letters:** Automatically generates tailored `.tex` cover letters and compiles them into clean PDFs for top-scoring matches.
 * **Comprehensive HTML Reporting:** Emits structured JSON summaries and renders a visual Jinja2-powered HTML match report to easily review pipeline results.
 
@@ -19,17 +20,53 @@ An end-to-end Python pipeline designed to automate job discovery, fit analysis, 
 * **Zero Running Costs**: Perform unlimited job evaluations, prompt adjustments, and cover letter generations without incurring per-token API fees or subscription costs.
 * **Model Flexibility**: Seamlessly switch between local models (e.g., `llama3.2`, `mistral`, `qwen2.5`) via CLI flags (`-m`) based on your available CPU/GPU hardware.
 
-### 2. Intelligent Storage & Deduplication (`db.py`)
+### 2. Pipeline Stages and Per-Stage Routing
+
+The pipeline runs three independent LLM workloads:
+
+1. **`evaluate`** scores each profile/job pair and extracts alignments and missing skills.
+2. **`cover_letter`** writes the first-person letter for the highest-scoring profile.
+3. **`cv_customise`** requests a strict JSON patch, then applies it locally to the existing CV. Unknown role/bullet IDs and factual employment fields are ignored.
+
+Create a JSON file and pass it with `--config pipeline.json`:
+
+```json
+{
+  "ollama_host": "http://localhost:11434",
+  "max_job_chars": 12000,
+  "evaluate": {"provider": "ollama", "model": "llama3.2:3b"},
+  "cover_letter": {"provider": "gemini", "model": "gemini-3.8-flash", "min_score": 70},
+  "cv_customise": {"provider": "ollama", "model": "llama3.2:3b", "min_score": 80}
+}
+```
+
+`provider` must be `ollama` or `gemini`. `min_score` is inclusive: a score equal to the threshold runs the stage, while a lower score skips it without an LLM call. Missing or invalid scores safely skip gated stages. If `GEMINI_API_KEY` is absent, any Gemini stage logs a warning and falls back to the default Ollama model. With no config file, all stages use Ollama and `-m` selects its model.
+
+For slower CPUs and Intel Macs, a practical hybrid is local Ollama for `evaluate` and `cv_customise`, with Gemini only for `cover_letter` and a score gate such as 75. Job descriptions are whitespace-cleaned and truncated before being sent to either provider.
+
+### 3. Free Gemini API Key (No Billing Required)
+
+1. Open [Google AI Studio](https://aistudio.google.com/apikey), sign in, and accept the Terms of Service on first visit. AI Studio creates a default project and key without requiring a credit card or billing setup.
+2. On the API Keys page, verify the key is restricted to the Gemini API. If it is marked **Unrestricted**, choose **Add restrictions** and restrict it to Gemini API only.
+3. Set the key in your shell or a local, uncommitted `.env` file:
+
+   ```bash
+   export GEMINI_API_KEY="your_api_key_here"
+   ```
+
+Never commit `.env` files or API keys. The free tier has per-minute RPM/TPM and daily RPD limits rather than billing charges; exceeding them returns HTTP 429 and the client retries transient failures with backoff. Google may use free-tier prompts and responses to improve products, so omit sensitive personal details such as a street address or phone number from CV data sent to Gemini, or keep those stages on local Ollama.
+
+### 4. Intelligent Storage & Deduplication (`db.py`)
 * **Canonical Title/Company Hashing**: Employs normalized MD5 hashing on company names and titles (e.g., equating "Senior Go Developer" with "Sr Go Developer") to filter out re-posted or duplicate roles across configurable lookback windows.
 * **State-Driven Queue Management**: Explicit state tracking (`pending`, `matched`, `skipped_low_score`, `error`) allows you to adjust evaluation criteria or prompts and re-run analysis on existing database entries without re-scraping target platforms.
 
-### 3. Structured Match Insights (`evaluator.py` & `report_builder.py`)
+### 5. Structured Match Insights (`evaluator.py` & `report_builder.py`)
 * **Actionable Gap Analysis**: Goes beyond a simple numerical score (0–100) by extracting structured JSON payloads featuring **Key Alignments** (strong matches to leverage) and **Missing Skills** (gaps to address or prepare for in interviews).
 * **Flexible Response Handling**: Employs pattern matching to extract structured content from common local LLM output formats (such as wrapper blocks or stacked JSON objects), mitigating raw JSON leakage in rendered outputs.
 * **Automated Tailored Cover Letters**: Top-scoring roles automatically trigger LaTeX engine compilation (`pdflatex`) to produce personalized cover letter PDFs tailored to the target listing.
 * **Daily Digest Summary Report**: Compiles evaluation runs into a single HTML dashboard (`match_report.html`) complete with visual score badges and color-coded gap lists for quick review.
 
-### 4. Modular & Developer-Friendly
+### 6. Modular & Developer-Friendly
 * **Test-Driven Design**: Built with a `pytest` test suite verifying Jinja2 template rendering and structural data assertions prior to deployment.
 * **Decoupled Execution**: Flexible CLI flags (such as `--skip-scrape`) allow developers to execute scraping, local inference, and HTML report building together or independently.
 
@@ -236,6 +273,7 @@ Scrape LinkedIn for target roles, evaluate matches with Ollama, generate cover l
 | `--template` | `-t` | `"cover_letter_template.tex"` | Base LaTeX cover letter template path |
 | `--outdir` | `-o` | `"output"` | Directory where generated reports and PDFs are written |
 | `--min-score` | | `70` | Minimum match fit score (0–100) required to compile a PDF cover letter |
+| `--config` | | — | JSON file containing per-stage providers, models, score gates, and prompt limits |
 | `--skip-scrape`| | `False` | Skip scraping and process pending jobs already in `jobs.db` |
 | `--since-last` | | `False` | Fetch ads posted or updated since the last successful scrape; mutually exclusive with `--since-date` |
 | `--since-date` | | — | Fetch ads posted or updated on/after a UTC `YYYY-MM-DD` date; mutually exclusive with `--since-last` |
@@ -311,8 +349,8 @@ To re-process only the first 2 job listings in your database:
 
 ## 🧪 Testing
 
-Run the unit test suite with `pytest` to verify template rendering and pipeline data assertions:
+Run the full unit test suite with branch coverage and enforce the 90% gate:
 
 ```bash
-pytest
+pytest tests --cov=. --cov-branch --cov-config=.coveragerc --cov-report=term-missing
 ```

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import evaluator
+from llm_client import LLMResponseError
 
 # --- Fixtures ---
 
@@ -124,6 +125,23 @@ def test_parse_llm_response_json_in_markdown_fence():
     assert score == 90
     assert body == "Clean body inside markdown block."
     assert alignments == ["Golang"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    ["{}", '{"fit_score": 101}', '{"fit_score": "80"}', "not json"],
+)
+def test_parse_configured_llm_response_rejects_invalid_scores(response):
+    with pytest.raises(LLMResponseError):
+        evaluator.parse_llm_response(response, strict=True)
+
+
+def test_parse_configured_llm_response_accepts_valid_score():
+    body, score, _, _ = evaluator.parse_llm_response(
+        '{"fit_score": 80, "cover_letter_body": "Body"}', strict=True
+    )
+    assert body == "Body"
+    assert score == 80
 
 
 def test_parse_llm_response_json_invalid_list_types():
